@@ -5,8 +5,9 @@
   "main": "index.js",
   "private": true,
   "scripts": {
-    "test": "elm-analyse && elm-format --validate src/",
-    "format": "elm-format src --yes",
+    "analyse": "elm-analyse",
+    "test": "elm-test",
+    "format": "elm-format --yes src/",
     "start": "npm run format && parcel src/index.html",
     "build": "npm run format && parcel build src/index.html --public-url ./"
   },
