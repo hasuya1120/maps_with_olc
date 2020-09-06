@@ -4,7 +4,6 @@ import Browser
 import Html
 import Html.Styled as HtmlS
 import Html.Styled.Attributes exposing (..)
-import Html.Styled.Events exposing (onClick)
 import Maps
 import Maps.Geo
 import Maps.Map
@@ -77,4 +76,4 @@ view model =
 
 mapView : Model -> VirtualDom.Node Msg
 mapView model =
-    Maps.view model.map |> Maps.mapView MapsMsg |> HtmlS.toUnstyled
+    model.map |> Maps.view |> Maps.mapView MapsMsg |> HtmlS.toUnstyled
