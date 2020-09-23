@@ -1,11 +1,16 @@
-module Olc exposing (..)
+module Olc exposing (OlcDigits, OlcString, getOlcString)
 
+import List.Extra
 import Maybe.Extra
 import String
 
 
+
+-- TYPES
+
+
 type OlcDigits
-    = OlcDigits String
+    = OlcDigits Char
 
 
 type OlcString
@@ -16,136 +21,155 @@ type alias RawLatitude =
     Float
 
 
+type alias ClippedLatitude =
+    Float
+
+
+type alias PositiveLatitude =
+    Int
+
+
 type alias RawLongitude =
     Float
+
+
+type alias NormalizedLongitude =
+    Float
+
+
+type alias PositiveLongitude =
+    Int
 
 
 type alias RawCoordinate =
     ( RawLatitude, RawLongitude )
 
 
-fromDecimalToDigit : Int -> Maybe OlcDigits
-fromDecimalToDigit value =
-    case value of
-        0 ->
-            OlcDigits "2" |> Just
-
-        1 ->
-            OlcDigits "3" |> Just
-
-        2 ->
-            OlcDigits "4" |> Just
-
-        3 ->
-            OlcDigits "5" |> Just
-
-        4 ->
-            OlcDigits "6" |> Just
-
-        5 ->
-            OlcDigits "7" |> Just
-
-        6 ->
-            OlcDigits "8" |> Just
-
-        7 ->
-            OlcDigits "9" |> Just
-
-        8 ->
-            OlcDigits "C" |> Just
-
-        9 ->
-            OlcDigits "F" |> Just
-
-        10 ->
-            OlcDigits "G" |> Just
-
-        11 ->
-            OlcDigits "H" |> Just
-
-        12 ->
-            OlcDigits "J" |> Just
-
-        13 ->
-            OlcDigits "M" |> Just
-
-        14 ->
-            OlcDigits "P" |> Just
-
-        15 ->
-            OlcDigits "Q" |> Just
-
-        16 ->
-            OlcDigits "R" |> Just
-
-        17 ->
-            OlcDigits "V" |> Just
-
-        18 ->
-            OlcDigits "W" |> Just
-
-        19 ->
-            OlcDigits "X" |> Just
-
-        _ ->
-            Nothing
-
-
-fromDigitsToMaybeOlcString : List (Maybe OlcDigits) -> Maybe OlcString
-fromDigitsToMaybeOlcString maybeOlcDigits =
-    maybeOlcDigits
-        |> Maybe.Extra.combine
-        |> Maybe.andThen fromDigitsToOlcString
-
-
-fromDigitsToOlcString : List OlcDigits -> Maybe OlcString
-fromDigitsToOlcString olcDigits =
-    olcDigits
-        |> List.map (\(OlcDigits str) -> str)
-        |> String.concat
-        |> OlcString
-        |> Just
-
-
-type FormatSeparator
-    = FormatSeparator String
-
-
-formatSeparator : FormatSeparator
-formatSeparator =
-    FormatSeparator "+"
-
-
-type PaddingCharacter
-    = PaddingCharacter String
-
-
-paddingCharacter : PaddingCharacter
-paddingCharacter =
-    PaddingCharacter "0"
-
-
-toOlcMostSignificant10Digits : RawCoordinate -> Maybe OlcString
-toOlcMostSignificant10Digits rawCoordinate =
-    rawCoordinate
-        |> convertToPositiveCoordinate
-        |> convertCoordinateToOlcDigits []
-        |> fromDigitsToMaybeOlcString
-
-
 type alias PositiveCoordinate =
     ( PositiveLatitude, PositiveLongitude )
 
 
-convertToPositiveCoordinate : RawCoordinate -> PositiveCoordinate
-convertToPositiveCoordinate rawCoodinate =
-    rawCoodinate
-        |> Tuple.mapBoth normalizeLongitude clipLatitude
-        |> Tuple.mapBoth convertToPositiveLongitude convertToPositiveLatitude
+paddingCharacter : Char
+paddingCharacter =
+    '0'
 
 
-type alias NormalizedLongitude =
-    Float
+formatSeparator : String
+formatSeparator =
+    "+"
+
+
+separatePosition : Int
+separatePosition =
+    8
+
+
+olcDigits : List OlcDigits
+olcDigits =
+    [ '2', '3', '4', '5', '6', '7', '8', '9', 'C', 'F', 'G', 'H', 'J', 'M', 'P', 'Q', 'R', 'V', 'W', 'X' ]
+        |> List.map OlcDigits
+
+
+fromIntegerToDigit : Int -> Maybe OlcDigits
+fromIntegerToDigit value =
+    List.Extra.getAt value olcDigits
+
+
+fromDigitsToOlcString : Int -> List (Maybe OlcDigits) -> OlcString
+fromDigitsToOlcString codeLength maybeOlcDigits =
+    maybeOlcDigits
+        |> Maybe.Extra.combine
+        |> Maybe.withDefault []
+        |> List.map (\(OlcDigits str) -> str)
+        |> String.fromList
+        |> String.slice 0 codeLength
+        |> OlcString
+
+
+insertFormatSeparator : OlcString -> OlcString
+insertFormatSeparator (OlcString string) =
+    let
+        beforeSeparatorSubString =
+            String.slice 0 separatePosition string |> String.padRight separatePosition paddingCharacter
+
+        afterSeparaterSubString =
+            String.slice separatePosition (String.length string) string
+    in
+    [ beforeSeparatorSubString, afterSeparaterSubString ]
+        |> String.join formatSeparator
+        |> OlcString
+
+
+
+{--TODO: Write documentation about generate OlcString --}
+
+
+getOlcString : Int -> RawCoordinate -> OlcString
+getOlcString codeLength rawCoordinate =
+    rawCoordinate
+        |> Tuple.mapBoth clipLatitude normalizeLongitude
+        |> calculateMostSignificant10Digits codeLength
+
+
+calculateMostSignificant10Digits : Int -> ( ClippedLatitude, NormalizedLongitude ) -> OlcString
+calculateMostSignificant10Digits codeLength postiveCoordinate =
+    postiveCoordinate
+        |> Tuple.mapBoth convertToPositiveLatitude convertToPositiveLongitude
+        |> convertCoordinateToOlcDigits []
+        |> fromDigitsToOlcString codeLength
+        |> insertFormatSeparator
+
+
+convertCoordinateToOlcDigits : List (Maybe OlcDigits) -> PositiveCoordinate -> List (Maybe OlcDigits)
+convertCoordinateToOlcDigits acc ( latitude, longitude ) =
+    if List.length acc < 10 then
+        let
+            longitudeDigit =
+                longitude |> modBy20 |> fromIntegerToDigit
+
+            latitudeDigit =
+                latitude |> modBy20 |> fromIntegerToDigit
+
+            newAcc =
+                List.append [ latitudeDigit, longitudeDigit ] acc
+
+            newLongitude =
+                divideBy20 longitude
+
+            newLatitude =
+                divideBy20 latitude
+        in
+        convertCoordinateToOlcDigits newAcc ( newLatitude, newLongitude )
+
+    else
+        acc
+
+
+gridRows : Int
+gridRows =
+    5
+
+
+gridColumns : Int
+gridColumns =
+    4
+
+
+
+{--TODO: implement a function to calculate least significant 5 digits--}
+
+
+calculateLeastSignificant5digits : Int -> ( ClippedLatitude, NormalizedLongitude ) -> OlcString
+calculateLeastSignificant5digits codeLength coordinate =
+    if codeLength <= 11 then
+        OlcString ""
+
+    else
+        OlcString ""
+
+
+
+-- Utils
 
 
 normalizeLongitude : RawLongitude -> NormalizedLongitude
@@ -160,17 +184,9 @@ normalizeLongitude longitude =
         longitude
 
 
-type alias PositiveLongitude =
-    Int
-
-
 convertToPositiveLongitude : NormalizedLongitude -> PositiveLongitude
 convertToPositiveLongitude longitude =
     (longitude + 180) * 8000 |> floor
-
-
-type alias ClippedLatitude =
-    Float
 
 
 clipLatitude : RawLatitude -> ClippedLatitude
@@ -178,38 +194,9 @@ clipLatitude latitude =
     clamp -90 90 latitude
 
 
-type alias PositiveLatitude =
-    Int
-
-
 convertToPositiveLatitude : ClippedLatitude -> PositiveLongitude
 convertToPositiveLatitude latitude =
     (latitude + 90) * 8000 |> floor
-
-
-convertCoordinateToOlcDigits : List (Maybe OlcDigits) -> PositiveCoordinate -> List (Maybe OlcDigits)
-convertCoordinateToOlcDigits acc ( longitude, latitude ) =
-    if List.length acc < 10 then
-        let
-            longitudeDigit =
-                longitude |> modBy20 |> fromDecimalToDigit
-
-            latitudeDigit =
-                latitude |> modBy20 |> fromDecimalToDigit
-
-            newAcc =
-                List.append [ latitudeDigit, longitudeDigit ] acc
-
-            newLongitude =
-                divideBy20 longitude
-
-            newLatitude =
-                divideBy20 latitude
-        in
-        convertCoordinateToOlcDigits newAcc ( newLongitude, newLatitude )
-
-    else
-        acc
 
 
 modBy20 : Int -> Int
