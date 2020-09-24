@@ -2,7 +2,7 @@ module Olc exposing (OlcDigits, OlcString, getOlcString)
 
 import List.Extra
 import Maybe.Extra
-import String
+import String exposing (join)
 
 
 
@@ -49,6 +49,10 @@ type alias PositiveCoordinate =
     ( PositiveLatitude, PositiveLongitude )
 
 
+
+-- constants
+
+
 paddingCharacter : Char
 paddingCharacter =
     '0'
@@ -70,6 +74,36 @@ olcDigits =
         |> List.map OlcDigits
 
 
+maxLatitude : Float
+maxLatitude =
+    90
+
+
+maxLongitude : Float
+maxLongitude =
+    180
+
+
+pairCodeLength : Int
+pairCodeLength =
+    10
+
+
+gridCodeLength : Int
+gridCodeLength =
+    5
+
+
+gridRows : Int
+gridRows =
+    5
+
+
+gridColumns : Int
+gridColumns =
+    4
+
+
 fromIntegerToDigit : Int -> Maybe OlcDigits
 fromIntegerToDigit value =
     List.Extra.getAt value olcDigits
@@ -84,6 +118,7 @@ fromDigitsToOlcString codeLength maybeOlcDigits =
         |> String.fromList
         |> String.slice 0 codeLength
         |> OlcString
+        |> insertFormatSeparator
 
 
 insertFormatSeparator : OlcString -> OlcString
@@ -107,77 +142,34 @@ insertFormatSeparator (OlcString string) =
 getOlcString : Int -> RawCoordinate -> OlcString
 getOlcString codeLength rawCoordinate =
     rawCoordinate
-        |> Tuple.mapBoth clipLatitude normalizeLongitude
-        |> calculateMostSignificant10Digits codeLength
-
-
-calculateMostSignificant10Digits : Int -> ( ClippedLatitude, NormalizedLongitude ) -> OlcString
-calculateMostSignificant10Digits codeLength postiveCoordinate =
-    postiveCoordinate
-        |> Tuple.mapBoth convertToPositiveLatitude convertToPositiveLongitude
-        |> convertCoordinateToOlcDigits []
+        |> convertToPositiveCoordinate
+        |> calculateOlcDigits codeLength
         |> fromDigitsToOlcString codeLength
-        |> insertFormatSeparator
 
 
-convertCoordinateToOlcDigits : List (Maybe OlcDigits) -> PositiveCoordinate -> List (Maybe OlcDigits)
-convertCoordinateToOlcDigits acc ( latitude, longitude ) =
-    if List.length acc < 10 then
-        let
-            longitudeDigit =
-                longitude |> modBy20 |> fromIntegerToDigit
-
-            latitudeDigit =
-                latitude |> modBy20 |> fromIntegerToDigit
-
-            newAcc =
-                List.append [ latitudeDigit, longitudeDigit ] acc
-
-            newLongitude =
-                divideBy20 longitude
-
-            newLatitude =
-                divideBy20 latitude
-        in
-        convertCoordinateToOlcDigits newAcc ( newLatitude, newLongitude )
-
-    else
-        acc
+convertToPositiveCoordinate : RawCoordinate -> PositiveCoordinate
+convertToPositiveCoordinate rawCoordinate =
+    rawCoordinate
+        |> Tuple.mapBoth clipLatitude normalizeLongitude
+        |> Tuple.mapBoth convertToPositiveLatitude convertToPositiveLongitude
 
 
-gridRows : Int
-gridRows =
-    5
+clipLatitude : RawLatitude -> ClippedLatitude
+clipLatitude latitude =
+    clamp -maxLatitude maxLatitude latitude
 
 
-gridColumns : Int
-gridColumns =
-    4
-
-
-
-{--TODO: implement a function to calculate least significant 5 digits--}
-
-
-calculateLeastSignificant5digits : Int -> ( ClippedLatitude, NormalizedLongitude ) -> OlcString
-calculateLeastSignificant5digits codeLength coordinate =
-    if codeLength <= 11 then
-        OlcString ""
-
-    else
-        OlcString ""
-
-
-
--- Utils
+convertToPositiveLatitude : ClippedLatitude -> PositiveLongitude
+convertToPositiveLatitude latitude =
+    (latitude + maxLatitude) * 8000 * (gridRows ^ gridCodeLength |> toFloat) |> floor
 
 
 normalizeLongitude : RawLongitude -> NormalizedLongitude
 normalizeLongitude longitude =
-    if longitude >= 180 then
+    if longitude >= maxLongitude then
         normalizeLongitude (longitude - 360)
 
-    else if longitude < -180 then
+    else if longitude < -maxLongitude then
         normalizeLongitude (longitude + 360)
 
     else
@@ -186,17 +178,79 @@ normalizeLongitude longitude =
 
 convertToPositiveLongitude : NormalizedLongitude -> PositiveLongitude
 convertToPositiveLongitude longitude =
-    (longitude + 180) * 8000 |> floor
+    (longitude + maxLongitude) * 8000 * (gridColumns ^ gridCodeLength |> toFloat) |> floor
 
 
-clipLatitude : RawLatitude -> ClippedLatitude
-clipLatitude latitude =
-    clamp -90 90 latitude
+calculateOlcDigits : Int -> PositiveCoordinate -> List (Maybe OlcDigits)
+calculateOlcDigits codeLength positiveCoordinate =
+    let
+        least5Digits =
+            if pairCodeLength < codeLength then
+                calculateLeastSignificant5digits positiveCoordinate []
+
+            else
+                []
+
+        -- Shifting digits for least siginificant 5 digit calculation, so return to original
+        newCoordinate =
+            positiveCoordinate
+                |> Tuple.mapFirst (\lat -> lat // (gridRows ^ gridCodeLength))
+                |> Tuple.mapSecond (\lng -> lng // (gridColumns ^ gridCodeLength))
+
+        most10digits =
+            calculateMostSignificant10Digits newCoordinate []
+    in
+    List.append most10digits least5Digits
 
 
-convertToPositiveLatitude : ClippedLatitude -> PositiveLongitude
-convertToPositiveLatitude latitude =
-    (latitude + 90) * 8000 |> floor
+calculateMostSignificant10Digits : PositiveCoordinate -> List (Maybe OlcDigits) -> List (Maybe OlcDigits)
+calculateMostSignificant10Digits positiveCoordinate acc =
+    if List.length acc < pairCodeLength then
+        let
+            ( latitudeDigit, longitudeDigit ) =
+                positiveCoordinate
+                    |> Tuple.mapFirst (modBy20 >> fromIntegerToDigit)
+                    |> Tuple.mapSecond (modBy20 >> fromIntegerToDigit)
+
+            newAcc =
+                List.append [ latitudeDigit, longitudeDigit ] acc
+
+            newCoordinate =
+                positiveCoordinate
+                    |> Tuple.mapBoth divideBy20 divideBy20
+        in
+        calculateMostSignificant10Digits newCoordinate newAcc
+
+    else
+        acc
+
+
+calculateLeastSignificant5digits : PositiveCoordinate -> List (Maybe OlcDigits) -> List (Maybe OlcDigits)
+calculateLeastSignificant5digits positiveCoordinate acc =
+    if List.length acc < gridCodeLength then
+        let
+            {--TODO: The official implementation has the following formula, but the specification seems to be latitudeDigit * longitudeDigit.
+            Check why the formula is --}
+            digit =
+                positiveCoordinate
+                    |> Tuple.mapBoth modByGridRows modByGridColumns
+                    |> (\( latDigit, lngDigit ) -> (latDigit * 4) + lngDigit)
+                    |> fromIntegerToDigit
+
+            newAcc =
+                digit :: acc
+
+            newCoordinate =
+                Tuple.mapBoth divideByGridRows divideByGridColumns positiveCoordinate
+        in
+        calculateLeastSignificant5digits newCoordinate newAcc
+
+    else
+        acc
+
+
+
+-- Utils
 
 
 modBy20 : Int -> Int
@@ -204,6 +258,26 @@ modBy20 =
     modBy 20
 
 
+modByGridRows : Int -> Int
+modByGridRows =
+    modBy gridRows
+
+
+modByGridColumns : Int -> Int
+modByGridColumns =
+    modBy gridColumns
+
+
 divideBy20 : Int -> Int
 divideBy20 value =
     value // 20
+
+
+divideByGridRows : Int -> Int
+divideByGridRows value =
+    value // gridRows
+
+
+divideByGridColumns : Int -> Int
+divideByGridColumns value =
+    value // gridColumns
