@@ -125,7 +125,7 @@ insertFormatSeparator : OlcString -> OlcString
 insertFormatSeparator (OlcString string) =
     let
         beforeSeparatorSubString =
-            String.slice 0 separatePosition string |> String.padRight separatePosition paddingCharacter
+            string |> String.slice 0 separatePosition |> String.padRight separatePosition paddingCharacter
 
         afterSeparaterSubString =
             String.slice separatePosition (String.length string) string
@@ -162,6 +162,10 @@ clipLatitude latitude =
 convertToPositiveLatitude : ClippedLatitude -> PositiveLongitude
 convertToPositiveLatitude latitude =
     (latitude + maxLatitude) * 8000 * (gridRows ^ gridCodeLength |> toFloat) |> floor
+
+
+
+{--FIXME: type mismatch--}
 
 
 normalizeLongitude : RawLongitude -> NormalizedLongitude
