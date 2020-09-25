@@ -4,6 +4,7 @@ module Olc exposing
     , RawLatitude
     , RawLongitude
     , encode
+    , toString
     )
 
 {-| This module encodes and decodes Olc.
@@ -20,11 +21,13 @@ module Olc exposing
 # Functions
 
 @docs encode
+@docs toString
 
 -}
 
 import List.Extra
 import Maybe.Extra
+import Result.Extra
 import String exposing (join)
 
 
@@ -166,20 +169,36 @@ insertFormatSeparator (OlcString string) =
         |> OlcString
 
 
+{-| to String from OlcString.
+
+    toString OlcString "8FVC9G8F+6W" == "8FVC9G8F+6W"
+
+-}
+toString : OlcString -> String
+toString (OlcString string) =
+    string
+
+
 {-| Encodes latitude and longitude to Olc. Specify codeLength as the first argument and latitude and longitude tuples as the second argument, it will be encoded in olc.
 
-    encode 10 ( 47.365562, 8.524813 ) == OlcString "8FVC9G8F+6W"
+    encode 10 ( 47.365562, 8.524813 ) == Ok (OlcString "8FVC9G8F+6W")
 
 If the code length is 10 digits or less, the valid code length is an even digit(2, 4, 6, 8, 10).
 See [Olc Document](https://github.com/google/open-location-code/blob/master/docs/specification.md) for more details.
 
 -}
-encode : Int -> RawCoordinate -> OlcString
+encode : Int -> RawCoordinate -> Result String OlcString
 encode codeLength rawCoordinate =
-    rawCoordinate
-        |> convertToPositiveCoordinate
-        |> calculateOlcDigits codeLength
-        |> fromDigitsToOlcString codeLength
+    {--TODO: Allow latitude == 90 to be converted correctly--}
+    if (codeLength >= pairCodeLength) || (modBy 2 codeLength == 0) then
+        rawCoordinate
+            |> convertToPositiveCoordinate
+            |> calculateOlcDigits codeLength
+            |> fromDigitsToOlcString codeLength
+            |> Result.Extra.singleton
+
+    else
+        Err "Code length should be even when code lengh lower than or equal to 10."
 
 
 convertToPositiveCoordinate : RawCoordinate -> PositiveCoordinate
