@@ -1,0 +1,8 @@
+{
+    "name": "dmy/elm-doc-preview",
+    "summary": "Documentation previewer",
+    "version": "5.0.0",
+    "exposed-modules": [
+        "Olc"
+    ]
+}

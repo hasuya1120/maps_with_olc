@@ -1,4 +1,27 @@
-module Olc exposing (OlcDigits, OlcString, getOlcString)
+module Olc exposing
+    ( OlcString
+    , RawCoordinate
+    , RawLatitude
+    , RawLongitude
+    , encode
+    )
+
+{-| This module encodes and decodes Olc.
+
+
+# Types
+
+@docs OlcString
+@docs RawCoordinate
+@docs RawLatitude
+@docs RawLongitude
+
+
+# Functions
+
+@docs encode
+
+-}
 
 import List.Extra
 import Maybe.Extra
@@ -13,10 +36,14 @@ type OlcDigits
     = OlcDigits Char
 
 
+{-| A string representing Olc
+-}
 type OlcString
     = OlcString String
 
 
+{-| Latitude of WGS84.
+-}
 type alias RawLatitude =
     Float
 
@@ -29,6 +56,8 @@ type alias PositiveLatitude =
     Int
 
 
+{-| Longitude of WGS84.
+-}
 type alias RawLongitude =
     Float
 
@@ -41,6 +70,8 @@ type alias PositiveLongitude =
     Int
 
 
+{-| Latitude and longitude tuples to convert to Olc.
+-}
 type alias RawCoordinate =
     ( RawLatitude, RawLongitude )
 
@@ -135,12 +166,16 @@ insertFormatSeparator (OlcString string) =
         |> OlcString
 
 
+{-| Encodes latitude and longitude to Olc. Specify codeLength as the first argument and latitude and longitude tuples as the second argument, it will be encoded in olc.
 
-{--TODO: Write documentation about generate OlcString --}
+    encode 10 ( 47.365562, 8.524813 ) == OlcString "8FVC9G8F+6W"
 
+If the code length is 10 digits or less, the valid code length is an even digit(2, 4, 6, 8, 10).
+See [Olc Document](https://github.com/google/open-location-code/blob/master/docs/specification.md) for more details.
 
-getOlcString : Int -> RawCoordinate -> OlcString
-getOlcString codeLength rawCoordinate =
+-}
+encode : Int -> RawCoordinate -> OlcString
+encode codeLength rawCoordinate =
     rawCoordinate
         |> convertToPositiveCoordinate
         |> calculateOlcDigits codeLength
